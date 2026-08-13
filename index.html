@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Baseline — Security Posture Dashboard (Education/Testing Only)</title>
+<meta name="description" content="Free, privacy-first, session-only security risk/compliance/incident/training dashboard. Educational and testing use only. No data is transmitted, stored, or collected." />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+  * { box-sizing: border-box; }
+  html, body, #root { margin: 0; padding: 0; min-height: 100%; background: #0D1520; }
+  input[type="range"] { accent-color: #E4A94A; }
+</style>
+
+<!-- React + ReactDOM (production) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<!-- Babel standalone: lets this single file use JSX directly in the browser, no build step -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useMemo, useEffect, useRef } = React;
+
+// =====================================================================
+// Baseline — Security Posture Dashboard
+// Free, privacy-first, educational/testing tool.
+// No backend. No accounts. No cookies. No storage of any kind.
+// All state lives in memory for this browser tab only and is lost on
+// refresh or close. See disclaimer banner in the UI for full terms.
+// =====================================================================
+
+const COLORS = {
+  bg: "#0D1520",
+  panel: "#141F2E",
+  panelAlt: "#0F1A28",
+  border: "#243244",
+  amber: "#E4A94A",
+  teal: "#4FB6A6",
+  red: "#E2665C",
+  textPrimary: "#E8ECF1",
+  textSecondary: "#8291A6",
+};
+
+// ---------- Seed data (sample only, fully editable, nothing persisted) ----------
+const seedRisks = [
+  { id: "r1", asset: "Customer database", description: "No MFA on admin access", likelihood: 4, impact: 5, status: "open", owner: "IT Lead", notes: "" },
+  { id: "r2", asset: "Payroll system", description: "Vendor lacks SOC 2 report", likelihood: 3, impact: 4, status: "open", owner: "Finance", notes: "" },
+  { id: "r3", asset: "Laptop fleet", description: "Disk encryption not enforced", likelihood: 2, impact: 3, status: "mitigated", owner: "IT Lead", notes: "BitLocker rollout completed March 2026" },
+];
+
+const CSF_FUNCTIONS = ["Identify", "Protect", "Detect", "Respond", "Recover"];
+const seedControls = [
+  { id: "c1", fn: "Identify", name: "Asset inventory maintained", status: "implemented", notes: "" },
+  { id: "c2", fn: "Identify", name: "Risk register in place", status: "in_progress", notes: "" },
+  { id: "c3", fn: "Protect", name: "MFA enforced on privileged accounts", status: "not_started", notes: "" },
+  { id: "c4", fn: "Protect", name: "Endpoint encryption enforced", status: "implemented", notes: "" },
+  { id: "c5", fn: "Detect", name: "Log monitoring configured", status: "in_progress", notes: "" },
+  { id: "c6", fn: "Respond", name: "Incident response plan documented", status: "not_started", notes: "" },
+  { id: "c7", fn: "Recover", name: "Backup restoration tested", status: "not_started", notes: "" },
+];
+
+const seedIncidents = [
+  { id: "i1", title: "Phishing email reported by staff", severity: "low", linkedRiskId: null, status: "closed", date: "2026-07-02", notes: "" },
+];
+
+const seedTrainings = [
+  { id: "t1", name: "Phishing awareness", owner: "All staff", type: "phishing_sim", completion: 62, failRate: 18 },
+  { id: "t2", name: "Secure password practices", owner: "All staff", type: "awareness", completion: 80, failRate: null },
+  { id: "t3", name: "Incident reporting procedure", owner: "IT Lead", type: "awareness", completion: 40, failRate: null },
+  { id: "t4", name: "AI-generated phishing & deepfake awareness", owner: "All staff", type: "phishing_sim", completion: 45, failRate: 35 },
+];
+
+const seedVendors = [
+  { id: "v1", name: "Cloud hosting provider", tier: "high", status: "approved", lastReviewed: "2026-05-10", notes: "SOC 2 report on file", aiTool: false },
+  { id: "v2", name: "Payroll processor", tier: "critical", status: "flagged", lastReviewed: "2025-11-02", notes: "SOC 2 report expired — follow up requested", aiTool: false },
+  { id: "v3", name: "Email marketing tool", tier: "low", status: "approved", lastReviewed: "2026-06-01", notes: "", aiTool: false },
+  { id: "v4", name: "AI writing assistant (SaaS)", tier: "high", status: "pending", lastReviewed: "2026-07-15", notes: "Review what customer data may be entered into prompts", aiTool: true },
+];
+
+const VENDOR_TIER_WEIGHT = { low: 1, medium: 2, high: 3, critical: 4 };
+
+// ---------- AI Governance controls (NIST AI RMF: Govern / Map / Measure / Manage) ----------
+const AI_RMF_FUNCTIONS = ["Govern", "Map", "Measure", "Manage"];
+const seedAiControls = [
+  { id: "a1", fn: "Govern", name: "Acceptable AI use policy documented", status: "not_started", notes: "" },
+  { id: "a2", fn: "Govern", name: "Sensitive data restricted from public AI tools", status: "not_started", notes: "" },
+  { id: "a3", fn: "Map", name: "Inventory of AI tools/vendors in use maintained", status: "in_progress", notes: "" },
+  { id: "a4", fn: "Measure", name: "Deepfake / voice-clone verification procedure for financial requests", status: "not_started", notes: "" },
+  { id: "a5", fn: "Manage", name: "Incident response plan covers AI-specific incidents (prompt injection, AI data leakage, deepfake fraud)", status: "not_started", notes: "" },
+];
+
+const STATUS_LABEL = { not_started: "Not started", in_progress: "In progress", implemented: "Implemented" };
+const SEVERITY_WEIGHT = { low: 1, medium: 2, high: 3, critical: 4 };
+
+// ---------- Reference mapping: module -> role/cert domains -> audits it supports ----------
+// Illustrative and educational only. Following these practices does not by itself
+// guarantee passing a certification exam or an external audit.
+const MAPPING = [
+  {
+    module: "Risk Register",
+    role: "CISO: risk oversight & strategic prioritization",
+    certs: [
+      "CISA — Domain 2: Governance & Management of IT",
+      "CRISC — Domain 1: Risk Identification",
+      "CISM — Domain 2: Information Risk Management",
+    ],
+    audits: ["ISO/IEC 27001 — Clause 6, risk assessment", "SOC 2 — CC3: Risk Assessment", "NIST CSF — Identify function"],
+  },
+  {
+    module: "Compliance (Controls)",
+    role: "CISO: policy ownership & control implementation",
+    certs: [
+      "CISA — Domain 5: Protection of Information Assets",
+      "CISM — Domain 3: Information Security Program",
+      "CCISO — Domain 1: Governance & Risk Management",
+    ],
+    audits: ["ISO/IEC 27001 — Annex A controls", "SOC 2 — Trust Services Criteria", "NIST CSF — Protect function", "PCI DSS — control requirements"],
+  },
+  {
+    module: "Incidents",
+    role: "CISO: incident response leadership & escalation",
+    certs: [
+      "CISA — Domain 4: IS Operations & Business Resilience",
+      "CISM — Domain 4: Incident Management",
+      "CCISO — Domain 3: Security Program Management & Operations",
+    ],
+    audits: ["ISO/IEC 27001 — A.5.24–A.5.28 incident management", "SOC 2 — CC7: System Operations", "NIST CSF — Respond & Recover functions"],
+  },
+  {
+    module: "Training",
+    role: "CISO: security awareness program ownership",
+    certs: [
+      "CISA — Domain 2: Governance (awareness as a control)",
+      "CISM — Domain 3: security awareness component",
+      "CCISO — Domain 1: culture & awareness",
+    ],
+    audits: ["ISO/IEC 27001 — A.6.3 awareness training", "SOC 2 — CC1.4: competence & training", "PCI DSS — Requirement 12.6"],
+  },
+  {
+    module: "Vendors (Third-Party Risk)",
+    role: "CISO: third-party & supply-chain risk oversight",
+    certs: [
+      "CRISC — Domain 1: Risk Identification (extended assets)",
+      "CISA — Domain 5: Protection of Information Assets",
+      "CCISO — Domain 1: Governance & Risk Management",
+    ],
+    audits: ["ISO/IEC 27001 — A.5.19–A.5.22 supplier relationships", "SOC 2 — CC9: Risk Mitigation (vendors)", "NIST CSF — ID.SC supply chain risk", "PCI DSS — Requirement 12.8"],
+  },
+  {
+    module: "AI Governance",
+    role: "CISO: AI risk oversight — shadow AI, data leakage, AI-enhanced social engineering",
+    certs: [
+      "NIST AI RMF — Govern / Map / Measure / Manage functions",
+      "ISO/IEC 42001 — AI management system (certifiable)",
+      "OWASP LLM Top 10 (2025) — e.g. prompt injection, sensitive info disclosure",
+    ],
+    audits: ["ISO/IEC 42001 certification", "SOC 2 — CC6.1/CC6.6 logical access & CC8.1 change mgmt extended to AI systems", "NIST AI RMF — not itself certifiable, but increasingly used by auditors as shared governance vocabulary"],
+  },
+  {
+    module: "Posture Score (Overview)",
+    role: "CISO: board/exec reporting of overall risk posture",
+    certs: ["CCISO — Domain 1: strategic governance", "CISM — overall program metrics", "CISSP — Domain 1: Security & Risk Management"],
+    audits: ["Cross-cutting — feeds exec summary for any of the above audits"],
+  },
+];
+
+let idCounter = 100;
+const nextId = (p) => `${p}${idCounter++}`;
+
+// ---------- Small UI primitives ----------
+function Card({ children, style }) {
+  return (
+    <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 18, ...style }}>
+      {children}
+    </div>
+  );
+}
+
+function Label({ children }) {
+  return (
+    <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: COLORS.textSecondary, marginBottom: 6 }}>
+      {children}
+    </div>
+  );
+}
+
+function Pill({ text, tone = "neutral" }) {
+  const map = {
+    neutral: { bg: "rgba(130,145,166,0.15)", fg: COLORS.textSecondary },
+    good: { bg: "rgba(79,182,166,0.15)", fg: COLORS.teal },
+    warn: { bg: "rgba(228,169,74,0.15)", fg: COLORS.amber },
+    bad: { bg: "rgba(226,102,92,0.15)", fg: COLORS.red },
+  };
+  const c = map[tone];
+  return (
+    <span style={{ background: c.bg, color: c.fg, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, padding: "3px 8px", borderRadius: 999, whiteSpace: "nowrap" }}>
+      {text}
+    </span>
+  );
+}
+
+function Button({ children, onClick, variant = "default", style }) {
+  const base = {
+    fontFamily: "'IBM Plex Sans', sans-serif",
+    fontSize: 13,
+    fontWeight: 600,
+    padding: "8px 14px",
+    borderRadius: 7,
+    cursor: "pointer",
+    border: "1px solid transparent",
+    transition: "opacity 0.15s ease",
+  };
+  const variants = {
+    default: { background: COLORS.amber, color: "#1A1206", border: "none" },
+    ghost: { background: "transparent", color: COLORS.textPrimary, border: `1px solid ${COLORS.border}` },
+    danger: { background: "transparent", color: COLORS.red, border: `1px solid rgba(226,102,92,0.4)` },
+  };
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={(e) => (e.currentTarget.style.opacity = 0.8)}
+      onMouseLeave={(e) => (e.currentTarget.style.opacity = 1)}
+      style={{ ...base, ...variants[variant], ...style }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Input(props) {
+  return (
+    <input
+      {...props}
+      style={{
+        background: COLORS.panelAlt,
+        border: `1px solid ${COLORS.border}`,
+        borderRadius: 6,
+        padding: "8px 10px",
+        color: COLORS.textPrimary,
+        fontFamily: "'IBM Plex Sans', sans-serif",
+        fontSize: 13,
+        width: "100%",
+        boxSizing: "border-box",
+        ...props.style,
+      }}
+    />
+  );
+}
+
+function Select(props) {
+  return (
+    <select
+      {...props}
+      style={{
+        background: COLORS.panelAlt,
+        border: `1px solid ${COLORS.border}`,
+        borderRadius: 6,
+        padding: "8px 10px",
+        color: COLORS.textPrimary,
+        fontFamily: "'IBM Plex Sans', sans-serif",
+        fontSize: 13,
+        width: "100%",
+        boxSizing: "border-box",
+        ...props.style,
+      }}
+    >
+      {props.children}
+    </select>
+  );
+}
+
+// ---------- Posture Ring (signature element) ----------
+function PostureRing({ score, prevScore }) {
+  const size = 148;
+  const stroke = 10;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const [animated, setAnimated] = useState(prevScore ?? score);
+
+  useEffect(() => {
+    const t = setTimeout(() => setAnimated(score), 60);
+    return () => clearTimeout(t);
+  }, [score]);
+
+  const offset = c - (Math.max(0, Math.min(100, animated)) / 100) * c;
+  const tone = score >= 70 ? COLORS.teal : score >= 45 ? COLORS.amber : COLORS.red;
+
+  return (
+    <div style={{ position: "relative", width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={COLORS.border} strokeWidth={stroke} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={tone}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset 0.9s cubic-bezier(0.4,0,0.2,1), stroke 0.6s ease" }}
+        />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 34, fontWeight: 600, color: tone, lineHeight: 1 }}>
+          {Math.round(score)}
+        </div>
+        <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: COLORS.textSecondary, marginTop: 4, letterSpacing: "0.08em" }}>
+          POSTURE
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Main App ----------
+function App() {
+  const [tab, setTab] = useState("overview");
+  const [risks, setRisks] = useState(seedRisks);
+  const [controls, setControls] = useState(seedControls);
+  const [incidents, setIncidents] = useState(seedIncidents);
+  const [trainings, setTrainings] = useState(seedTrainings);
+  const [vendors, setVendors] = useState(seedVendors);
+  const [aiControls, setAiControls] = useState(seedAiControls);
+  const [log, setLog] = useState([{ id: nextId("l"), text: "Session started — sample data loaded", ts: "now" }]);
+  const prevScoreRef = useRef(null);
+
+  const addLog = (text) => setLog((l) => [{ id: nextId("l"), text, ts: "now" }, ...l].slice(0, 8));
+
+  // ---- Derived metrics (this is the closed loop) ----
+  // Weights sum to 100: risk 28, compliance 22, incidents 14, vendors 14, training 14, AI governance 8
+  const metrics = useMemo(() => {
+    const openRisks = risks.filter((r) => r.status === "open");
+    const avgRiskScore = openRisks.length
+      ? openRisks.reduce((s, r) => s + r.likelihood * r.impact, 0) / openRisks.length
+      : 0; // 0-25 scale
+    const riskComponent = ((25 - avgRiskScore) / 25) * 28;
+
+    const implementedPct = controls.filter((c) => c.status === "implemented").length / controls.length;
+    const complianceComponent = implementedPct * 22;
+
+    const openIncidents = incidents.filter((i) => i.status !== "closed");
+    const incidentWeight = openIncidents.reduce((s, i) => s + SEVERITY_WEIGHT[i.severity], 0);
+    const incidentComponent = Math.max(0, 14 - incidentWeight * 2);
+
+    const avgTraining = trainings.length ? trainings.reduce((s, t) => s + t.completion, 0) / trainings.length : 0;
+    const phishingSims = trainings.filter((t) => t.type === "phishing_sim" && t.failRate != null);
+    const avgFailRate = phishingSims.length ? phishingSims.reduce((s, t) => s + t.failRate, 0) / phishingSims.length : 0;
+    const trainingComponent = Math.max(0, (avgTraining / 100) * 14 - (avgFailRate / 100) * 7);
+
+    const avgVendorTier = vendors.length ? vendors.reduce((s, v) => s + VENDOR_TIER_WEIGHT[v.tier], 0) / vendors.length : 0;
+    const flaggedVendors = vendors.filter((v) => v.status === "flagged").length;
+    const vendorComponent = Math.max(0, 14 * (1 - avgVendorTier / 4) - flaggedVendors * 3);
+
+    const aiImplementedPct = aiControls.filter((c) => c.status === "implemented").length / aiControls.length;
+    const aiComponent = aiImplementedPct * 8;
+
+    const posture = Math.max(0, Math.min(100, riskComponent + complianceComponent + incidentComponent + trainingComponent + vendorComponent + aiComponent));
+
+    return {
+      posture,
+      avgRiskScore,
+      implementedPct,
+      openIncidentsCount: openIncidents.length,
+      avgTraining,
+      avgFailRate,
+      openRisksCount: openRisks.length,
+      flaggedVendorsCount: flaggedVendors,
+      avgVendorTier,
+      aiImplementedPct,
+    };
+  }, [risks, controls, incidents, trainings, vendors, aiControls]);
+
+  useEffect(() => {
+    prevScoreRef.current = metrics.posture;
+  }, [metrics.posture]);
+
+  // ---- Actions ----
+  const addRisk = (r) => {
+    setRisks((prev) => [...prev, { ...r, id: nextId("r"), status: "open" }]);
+    addLog(`Risk added: ${r.description || r.asset}`);
+  };
+  const toggleRiskStatus = (id) => {
+    setRisks((prev) => prev.map((r) => (r.id === id ? { ...r, status: r.status === "open" ? "mitigated" : "open" } : r)));
+    addLog("Risk status updated — posture recalculated");
+  };
+  const updateRiskNotes = (id, notes) => {
+    setRisks((prev) => prev.map((r) => (r.id === id ? { ...r, notes } : r)));
+  };
+  const cycleControl = (id) => {
+    const order = ["not_started", "in_progress", "implemented"];
+    setControls((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, status: order[(order.indexOf(c.status) + 1) % order.length] } : c))
+    );
+    addLog("Control status updated — posture recalculated");
+  };
+  const updateControlNotes = (id, notes) => {
+    setControls((prev) => prev.map((c) => (c.id === id ? { ...c, notes } : c)));
+  };
+  const cycleAiControl = (id) => {
+    const order = ["not_started", "in_progress", "implemented"];
+    setAiControls((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, status: order[(order.indexOf(c.status) + 1) % order.length] } : c))
+    );
+    addLog("AI governance control updated — posture recalculated");
+  };
+  const updateAiControlNotes = (id, notes) => {
+    setAiControls((prev) => prev.map((c) => (c.id === id ? { ...c, notes } : c)));
+  };
+  const addIncident = (inc) => {
+    setIncidents((prev) => [...prev, { ...inc, id: nextId("i"), status: "open", date: "today" }]);
+    addLog(`Incident logged: ${inc.title} (${inc.severity}) — posture recalculated`);
+  };
+  const closeIncident = (id) => {
+    setIncidents((prev) => prev.map((i) => (i.id === id ? { ...i, status: "closed" } : i)));
+    addLog("Incident closed — posture recalculated");
+  };
+  const updateIncidentNotes = (id, notes) => {
+    setIncidents((prev) => prev.map((i) => (i.id === id ? { ...i, notes } : i)));
+  };
+  const updateTraining = (id, val) => {
+    setTrainings((prev) => prev.map((t) => (t.id === id ? { ...t, completion: val } : t)));
+  };
+  const updateFailRate = (id, val) => {
+    setTrainings((prev) => prev.map((t) => (t.id === id ? { ...t, failRate: val } : t)));
+  };
+  const addVendor = (v) => {
+    setVendors((prev) => [...prev, { ...v, id: nextId("v"), status: "pending", lastReviewed: "today" }]);
+    addLog(`Vendor added: ${v.name} (${v.tier} tier) — posture recalculated`);
+  };
+  const cycleVendorStatus = (id) => {
+    const order = ["pending", "approved", "flagged"];
+    setVendors((prev) =>
+      prev.map((v) => (v.id === id ? { ...v, status: order[(order.indexOf(v.status) + 1) % order.length] } : v))
+    );
+    addLog("Vendor status updated — posture recalculated");
+  };
+  const resetSession = () => {
+    setRisks(seedRisks);
+    setControls(seedControls);
+    setIncidents(seedIncidents);
+    setTrainings(seedTrainings);
+    setVendors(seedVendors);
+    setAiControls(seedAiControls);
+    addLog("Session reset to sample data");
+  };
+
+  const TABS = [
+    { id: "overview", label: "Overview" },
+    { id: "risk", label: "Risk Register" },
+    { id: "compliance", label: "Compliance" },
+    { id: "incidents", label: "Incidents" },
+    { id: "vendors", label: "Vendors" },
+    { id: "training", label: "Training" },
+    { id: "reference", label: "Standards Map" },
+  ];
+
+  return (
+    <div style={{ minHeight: "100vh", background: COLORS.bg, color: COLORS.textPrimary, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+      {/* Header */}
+      <div style={{ borderBottom: `1px solid ${COLORS.border}`, padding: "18px 20px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+          <div>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 22, letterSpacing: "-0.01em" }}>Baseline</div>
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: COLORS.textSecondary, marginTop: 2 }}>
+              risk · compliance · incidents · vendors · training — one continuously-updating loop, not a once-a-year checkbox
+            </div>
+          </div>
+          <Button variant="ghost" onClick={resetSession}>Reset to sample data</Button>
+        </div>
+      </div>
+
+      {/* Disclaimer - always visible, not dismissible */}
+      <div style={{ background: "rgba(228,169,74,0.08)", borderBottom: `1px solid ${COLORS.border}`, padding: "10px 20px" }}>
+        <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: COLORS.amber, maxWidth: 900 }}>
+          For education and testing only — not a certified compliance or security product. Not for production decisions.
+          Nothing you enter is transmitted, stored, or collected — all data lives only in this browser session and is lost on refresh.
+        </div>
+        <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: COLORS.textSecondary, maxWidth: 900, marginTop: 6 }}>
+          Free, always. Built to help you think about risk continuously — not to replace real audits, or to sell you a checkbox.
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 4, padding: "14px 20px 0", borderBottom: `1px solid ${COLORS.border}`, overflowX: "auto" }}>
+        {TABS.map((t) => (
+          <div
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            style={{
+              fontFamily: "'IBM Plex Mono', monospace",
+              fontSize: 12,
+              padding: "8px 14px",
+              cursor: "pointer",
+              color: tab === t.id ? COLORS.textPrimary : COLORS.textSecondary,
+              borderBottom: tab === t.id ? `2px solid ${COLORS.amber}` : "2px solid transparent",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {t.label}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ padding: 20, maxWidth: 1000, margin: "0 auto" }}>
+        {tab === "overview" && (
+          <Overview metrics={metrics} risks={risks} incidents={incidents} controls={controls} log={log} prevScore={prevScoreRef.current} />
+        )}
+        {tab === "risk" && <RiskRegister risks={risks} addRisk={addRisk} toggleRiskStatus={toggleRiskStatus} updateRiskNotes={updateRiskNotes} />}
+        {tab === "compliance" && <Compliance controls={controls} cycleControl={cycleControl} updateControlNotes={updateControlNotes} aiControls={aiControls} cycleAiControl={cycleAiControl} updateAiControlNotes={updateAiControlNotes} />}
+        {tab === "incidents" && <Incidents incidents={incidents} risks={risks} addIncident={addIncident} closeIncident={closeIncident} updateIncidentNotes={updateIncidentNotes} />}
+        {tab === "vendors" && <Vendors vendors={vendors} addVendor={addVendor} cycleVendorStatus={cycleVendorStatus} />}
+        {tab === "training" && <Training trainings={trainings} updateTraining={updateTraining} updateFailRate={updateFailRate} />}
+        {tab === "reference" && <Reference />}
+      </div>
+
+      <div style={{ textAlign: "center", padding: "24px 20px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: COLORS.textSecondary }}>
+        Baseline is free, open, and collects nothing. Educational/testing use only.
+      </div>
+    </div>
+  );
+}
+
+// ---------- Overview ----------
+function Overview({ metrics, risks, incidents, controls, log, prevScore }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 20, marginBottom: 20 }}>
+      <Card style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 190 }}>
+        <PostureRing score={metrics.posture} prevScore={prevScore} />
+        <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12, color: COLORS.textSecondary, marginTop: 10, textAlign: "center" }}>
+          Recalculates live as you log incidents, update controls, or change training completion.
+        </div>
+      </Card>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+        <StatCard label="Open risks" value={metrics.openRisksCount} tone={metrics.openRisksCount > 2 ? "warn" : "good"} />
+        <StatCard label="Controls implemented" value={`${Math.round(metrics.implementedPct * 100)}%`} tone={metrics.implementedPct > 0.5 ? "good" : "warn"} />
+        <StatCard label="AI governance ready" value={`${Math.round(metrics.aiImplementedPct * 100)}%`} tone={metrics.aiImplementedPct > 0.5 ? "good" : "warn"} />
+        <StatCard label="Open incidents" value={metrics.openIncidentsCount} tone={metrics.openIncidentsCount > 0 ? "bad" : "good"} />
+        <StatCard label="Flagged vendors" value={metrics.flaggedVendorsCount} tone={metrics.flaggedVendorsCount > 0 ? "bad" : "good"} />
+        <StatCard label="Avg training completion" value={`${Math.round(metrics.avgTraining)}%`} tone={metrics.avgTraining > 70 ? "good" : "warn"} />
+      </div>
+
+      <Card style={{ gridColumn: "1 / -1" }}>
+        <Label>Activity log — this session</Label>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+          {log.map((l) => (
+            <div key={l.id} style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: COLORS.textSecondary, borderLeft: `2px solid ${COLORS.border}`, paddingLeft: 10 }}>
+              {l.text}
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function StatCard({ label, value, tone }) {
+  const toneColor = { good: COLORS.teal, warn: COLORS.amber, bad: COLORS.red }[tone] || COLORS.textPrimary;
+  return (
+    <Card>
+      <Label>{label}</Label>
+      <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 26, fontWeight: 600, color: toneColor }}>{value}</div>
+    </Card>
+  );
+}
+
+// ---------- Risk Register ----------
+function RiskRegister({ risks, addRisk, toggleRiskStatus, updateRiskNotes }) {
+  const [form, setForm] = useState({ asset: "", description: "", likelihood: 3, impact: 3, owner: "" });
+  const submit = () => {
+    if (!form.asset || !form.description) return;
+    addRisk(form);
+    setForm({ asset: "", description: "", likelihood: 3, impact: 3, owner: "" });
+  };
+  const map = MAPPING.find((m) => m.module === "Risk Register");
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <MapHint map={map} />
+      <Card>
+        <Label>Add risk</Label>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 10, marginTop: 8 }}>
+          <Input placeholder="Asset" value={form.asset} onChange={(e) => setForm({ ...form, asset: e.target.value })} />
+          <Input placeholder="Risk description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          <Input placeholder="Owner" value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} />
+          <div>
+            <Label>Likelihood ({form.likelihood})</Label>
+            <input type="range" min={1} max={5} value={form.likelihood} onChange={(e) => setForm({ ...form, likelihood: +e.target.value })} style={{ width: "100%" }} />
+          </div>
+          <div>
+            <Label>Impact ({form.impact})</Label>
+            <input type="range" min={1} max={5} value={form.impact} onChange={(e) => setForm({ ...form, impact: +e.target.value })} style={{ width: "100%" }} />
+          </div>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <Button onClick={submit}>Add to register</Button>
+        </div>
+      </Card>
+
+      {risks.map((r) => {
+        const score = r.likelihood * r.impact;
+        const tone = score >= 15 ? "bad" : score >= 8 ? "warn" : "good";
+        return (
+          <Card key={r.id}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15 }}>{r.asset}</div>
+                <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 3 }}>{r.description}</div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>Owner: {r.owner || "Unassigned"}</div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                <Pill text={`Score ${score}/25`} tone={tone} />
+                <Pill text={r.status === "open" ? "Open" : "Mitigated"} tone={r.status === "open" ? "warn" : "good"} />
+                <Button variant="ghost" onClick={() => toggleRiskStatus(r.id)}>
+                  {r.status === "open" ? "Mark mitigated" : "Reopen"}
+                </Button>
+              </div>
+            </div>
+            <EvidenceNote value={r.notes} onChange={(v) => updateRiskNotes(r.id, v)} />
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------- Compliance ----------
+function Compliance({ controls, cycleControl, updateControlNotes, aiControls, cycleAiControl, updateAiControlNotes }) {
+  const map = MAPPING.find((m) => m.module === "Compliance (Controls)");
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <MapHint map={map} />
+      {CSF_FUNCTIONS.map((fn) => (
+        <Card key={fn}>
+          <Label>{fn}</Label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            {controls.filter((c) => c.fn === fn).map((c) => {
+              const tone = c.status === "implemented" ? "good" : c.status === "in_progress" ? "warn" : "bad";
+              return (
+                <div key={c.id} style={{ paddingBottom: 8, borderBottom: `1px solid ${COLORS.border}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 13 }}>{c.name}</div>
+                    <Button variant="ghost" onClick={() => cycleControl(c.id)}>
+                      <Pill text={STATUS_LABEL[c.status]} tone={tone} />
+                    </Button>
+                  </div>
+                  {c.status === "implemented" && (
+                    <input
+                      value={c.notes || ""}
+                      onChange={(e) => updateControlNotes(c.id, e.target.value)}
+                      placeholder="Evidence — e.g. policy doc link, last review date"
+                      style={{
+                        marginTop: 6,
+                        background: COLORS.panelAlt,
+                        border: `1px solid ${COLORS.border}`,
+                        borderRadius: 6,
+                        padding: "6px 8px",
+                        color: COLORS.textPrimary,
+                        fontFamily: "'IBM Plex Sans', sans-serif",
+                        fontSize: 12,
+                        width: "100%",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+            {controls.filter((c) => c.fn === fn).length === 0 && (
+              <div style={{ fontSize: 12, color: COLORS.textSecondary }}>No controls added for this function yet.</div>
+            )}
+          </div>
+        </Card>
+      ))}
+      <div style={{ fontSize: 12, color: COLORS.textSecondary, fontFamily: "'IBM Plex Mono', monospace" }}>
+        Tap a status pill to cycle: Not started → In progress → Implemented.
+      </div>
+
+      <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 20, marginTop: 4 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 18, marginBottom: 4 }}>AI Governance</div>
+        <div style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 14 }}>
+          Structured around NIST AI RMF's four functions — practical, same-day-actionable items, unlike a full cryptographic migration.
+        </div>
+        <MapHint map={MAPPING.find((m) => m.module === "AI Governance")} />
+        <div style={{ height: 14 }} />
+        {AI_RMF_FUNCTIONS.map((fn) => (
+          <Card key={fn} style={{ marginBottom: 14 }}>
+            <Label>{fn}</Label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+              {aiControls.filter((c) => c.fn === fn).map((c) => {
+                const tone = c.status === "implemented" ? "good" : c.status === "in_progress" ? "warn" : "bad";
+                return (
+                  <div key={c.id} style={{ paddingBottom: 8, borderBottom: `1px solid ${COLORS.border}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <div style={{ fontSize: 13 }}>{c.name}</div>
+                      <Button variant="ghost" onClick={() => cycleAiControl(c.id)}>
+                        <Pill text={STATUS_LABEL[c.status]} tone={tone} />
+                      </Button>
+                    </div>
+                    {c.status === "implemented" && (
+                      <input
+                        value={c.notes || ""}
+                        onChange={(e) => updateAiControlNotes(c.id, e.target.value)}
+                        placeholder="Evidence — e.g. policy doc link, last review date"
+                        style={{
+                          marginTop: 6,
+                          background: COLORS.panelAlt,
+                          border: `1px solid ${COLORS.border}`,
+                          borderRadius: 6,
+                          padding: "6px 8px",
+                          color: COLORS.textPrimary,
+                          fontFamily: "'IBM Plex Sans', sans-serif",
+                          fontSize: 12,
+                          width: "100%",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+              {aiControls.filter((c) => c.fn === fn).length === 0 && (
+                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>No items for this function yet.</div>
+              )}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Incidents ----------
+function Incidents({ incidents, risks, addIncident, closeIncident, updateIncidentNotes }) {
+  const [form, setForm] = useState({ title: "", severity: "low", linkedRiskId: "" });
+  const submit = () => {
+    if (!form.title) return;
+    addIncident({ ...form, linkedRiskId: form.linkedRiskId || null });
+    setForm({ title: "", severity: "low", linkedRiskId: "" });
+  };
+  const map = MAPPING.find((m) => m.module === "Incidents");
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <MapHint map={map} />
+      <Card>
+        <Label>Log incident</Label>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 10, marginTop: 8 }}>
+          <Input placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+          <Select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })}>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </Select>
+          <Select value={form.linkedRiskId} onChange={(e) => setForm({ ...form, linkedRiskId: e.target.value })}>
+            <option value="">No linked risk</option>
+            {risks.map((r) => (
+              <option key={r.id} value={r.id}>{r.asset}</option>
+            ))}
+          </Select>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <Button onClick={submit}>Log incident</Button>
+        </div>
+      </Card>
+
+      {incidents.map((i) => {
+        const tone = i.status === "closed" ? "good" : i.severity === "critical" || i.severity === "high" ? "bad" : "warn";
+        return (
+          <Card key={i.id}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15 }}>{i.title}</div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 4 }}>{i.date}</div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                <Pill text={i.severity} tone={tone} />
+                <Pill text={i.status === "closed" ? "Closed" : "Open"} tone={i.status === "closed" ? "good" : "warn"} />
+                {i.status !== "closed" && (
+                  <Button variant="ghost" onClick={() => closeIncident(i.id)}>Close incident</Button>
+                )}
+              </div>
+            </div>
+            <EvidenceNote value={i.notes} onChange={(v) => updateIncidentNotes(i.id, v)} />
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------- Vendors (Third-Party Risk) ----------
+function Vendors({ vendors, addVendor, cycleVendorStatus }) {
+  const [form, setForm] = useState({ name: "", tier: "medium", notes: "", aiTool: false });
+  const submit = () => {
+    if (!form.name) return;
+    addVendor(form);
+    setForm({ name: "", tier: "medium", notes: "", aiTool: false });
+  };
+  const map = MAPPING.find((m) => m.module === "Vendors (Third-Party Risk)");
+  const statusTone = { approved: "good", pending: "warn", flagged: "bad" };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <MapHint map={map} />
+      <Card>
+        <Label>Add vendor</Label>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 10, marginTop: 8 }}>
+          <Input placeholder="Vendor name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <Select value={form.tier} onChange={(e) => setForm({ ...form, tier: e.target.value })}>
+            <option value="low">Low risk tier</option>
+            <option value="medium">Medium risk tier</option>
+            <option value="high">High risk tier</option>
+            <option value="critical">Critical risk tier</option>
+          </Select>
+        </div>
+        <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 8 }}>
+          Tier reflects data access and business impact — e.g. a payroll processor or cloud host is typically high/critical; a marketing tool is often low.
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12, cursor: "pointer" }}>
+          <input type="checkbox" checked={form.aiTool} onChange={(e) => setForm({ ...form, aiTool: e.target.checked })} />
+          This vendor is an AI/LLM tool or processes data via AI
+        </label>
+        <div style={{ marginTop: 12 }}>
+          <Button onClick={submit}>Add vendor</Button>
+        </div>
+      </Card>
+
+      {vendors.map((v) => (
+        <Card key={v.id}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15 }}>{v.name}</div>
+              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 4 }}>Last reviewed: {v.lastReviewed}</div>
+              {v.aiTool && <Pill text="AI/LLM tool" tone="warn" />}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+              <Pill text={`${v.tier} tier`} tone={v.tier === "critical" || v.tier === "high" ? "bad" : v.tier === "medium" ? "warn" : "good"} />
+              <Button variant="ghost" onClick={() => cycleVendorStatus(v.id)}>
+                <Pill text={v.status} tone={statusTone[v.status]} />
+              </Button>
+            </div>
+          </div>
+          {v.status === "flagged" && (
+            <div style={{ fontSize: 12, color: COLORS.red, marginTop: 8, fontFamily: "'IBM Plex Mono', monospace" }}>
+              Flagged vendors reduce posture score until resolved — e.g. expired attestation, overdue review, or reported incident.
+            </div>
+          )}
+          {v.notes && <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 8 }}>{v.notes}</div>}
+        </Card>
+      ))}
+      <div style={{ fontSize: 12, color: COLORS.textSecondary, fontFamily: "'IBM Plex Mono', monospace" }}>
+        Tap a status pill to cycle: Pending → Approved → Flagged.
+      </div>
+    </div>
+  );
+}
+
+// ---------- Training ----------
+function Training({ trainings, updateTraining, updateFailRate }) {
+  const map = MAPPING.find((m) => m.module === "Training");
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <MapHint map={map} />
+      {trainings.map((t) => (
+        <Card key={t.id}>
+          <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 15 }}>{t.name}</div>
+              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{t.owner}</div>
+              {t.type === "phishing_sim" && <Pill text="Phishing simulation" tone="warn" />}
+            </div>
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 18, color: t.completion > 70 ? COLORS.teal : COLORS.amber }}>
+              {t.completion}%
+            </div>
+          </div>
+          <Label>Completion</Label>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={t.completion}
+            onChange={(e) => updateTraining(t.id, +e.target.value)}
+            style={{ width: "100%" }}
+          />
+          {t.type === "phishing_sim" && (
+            <div style={{ marginTop: 10 }}>
+              <Label>Simulated click / fail rate ({t.failRate}%) — the metric most worth tracking here</Label>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={t.failRate}
+                onChange={(e) => updateFailRate(t.id, +e.target.value)}
+                style={{ width: "100%" }}
+              />
+            </div>
+          )}
+        </Card>
+      ))}
+      <div style={{ fontSize: 12, color: COLORS.textSecondary, fontFamily: "'IBM Plex Mono', monospace" }}>
+        Drag a slider to simulate updated results — posture score adjusts on the Overview tab.
+      </div>
+    </div>
+  );
+}
+
+// ---------- Evidence / notes field — text-only reference, nothing uploaded or stored ----------
+function EvidenceNote({ value, onChange }) {
+  return (
+    <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` }}>
+      <Label>Evidence / notes (e.g. where documentation lives, who reviewed it)</Label>
+      <textarea
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="e.g. Reviewed by IT Lead 2026-08-01, contract on file in vendor folder"
+        rows={2}
+        style={{
+          background: COLORS.panelAlt,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 6,
+          padding: "8px 10px",
+          color: COLORS.textPrimary,
+          fontFamily: "'IBM Plex Sans', sans-serif",
+          fontSize: 12,
+          width: "100%",
+          boxSizing: "border-box",
+          resize: "vertical",
+        }}
+      />
+    </div>
+  );
+}
+
+// ---------- Compact "where this fits" hint shown atop each module ----------
+function MapHint({ map }) {
+  if (!map) return null;
+  return (
+    <Card style={{ background: COLORS.panelAlt, borderStyle: "dashed" }}>
+      <Label>Where this fits</Label>
+      <div style={{ fontSize: 12, color: COLORS.textPrimary, marginBottom: 8 }}>{map.role}</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+        {map.certs.map((c) => <Pill key={c} text={c} tone="neutral" />)}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {map.audits.map((a) => <Pill key={a} text={a} tone="good" />)}
+      </div>
+    </Card>
+  );
+}
+
+// ---------- Reference tab: full standards map ----------
+function Reference() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <Card style={{ background: "rgba(228,169,74,0.08)" }}>
+        <div style={{ fontSize: 12, color: COLORS.amber, fontFamily: "'IBM Plex Mono', monospace" }}>
+          Illustrative mapping only. Practicing a module here does not by itself guarantee passing a certification
+          exam or an external audit — real programs require documented evidence, independent verification, and
+          often a licensed auditor or exam body. Use this as a study/orientation aid, not a compliance claim.
+        </div>
+      </Card>
+
+      {MAPPING.map((m) => (
+        <Card key={m.module}>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 4 }}>{m.module}</div>
+          <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 10 }}>{m.role}</div>
+
+          <Label>Certification domains it touches</Label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+            {m.certs.map((c) => <Pill key={c} text={c} tone="neutral" />)}
+          </div>
+
+          <Label>Audits / frameworks it helps prepare for</Label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {m.audits.map((a) => <Pill key={a} text={a} tone="good" />)}
+          </div>
+        </Card>
+      ))}
+
+      <div style={{ fontSize: 11, color: COLORS.textSecondary, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1.6 }}>
+        Cert abbreviations: CISA (Certified Information Systems Auditor, ISACA) · CISM (Certified Information Security
+        Manager, ISACA) · CRISC (Certified in Risk and Information Systems Control, ISACA) · CCISO (Certified CISO,
+        EC-Council) · CISSP (Certified Information Systems Security Professional, ISC2).
+        Framework abbreviations: ISO/IEC 27001, SOC 2 (Trust Services Criteria), NIST CSF, PCI DSS.
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+</body>
+</html>
