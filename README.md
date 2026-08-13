@@ -1,2 +1,1 @@
-# baseline-security-dashboard
-Free, privacy-first security posture dashboard covering risk, compliance (NIST CSF), incidents, vendor risk, training, and AI governance (NIST AI RMF) — all in one closed loop. No backend, no accounts, no cookies, nothing stored. Single HTML file, no build step. Educational/testing use only.
+Baseline is a free, single-file security posture dashboard — risk register, compliance tracking, incident response, vendor risk, training, and AI governance in one continuously-updating loop. Nothing is stored, tracked, or sent anywhere; all data lives only in your browser session. Educational and testing use only — not a certified compliance product.
